@@ -17,5 +17,3 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         generateValue: true
-      - key: TILDA_TOKEN_COMFORTCLINIC
-        sync: false

@@ -8,26 +8,22 @@ const ORIGIN=(process.env.PUBLIC_BASE_URL||'').replace(/\/$/,'');
 const upstream='https://tilda.kz/api/mcp/';
 const port=Number(process.env.PORT||3000);
 const now=()=>Math.floor(Date.now()/1000);
-const siteTokens=new Map();
-for(const [name,value] of Object.entries(process.env)){
- if(!name.startsWith('TILDA_TOKEN_') || !value)continue;
- const site=name.slice(12).toLowerCase().replaceAll('_','-');
- if(!/^[a-z][a-z0-9-]{0,63}$/.test(site) || /REPLACE|YOUR_TOKEN/i.test(value))throw Error('Invalid Tilda site configuration');
- siteTokens.set(site,value);
-}
 const password=process.env.ADMIN_PASSWORD||'';
 if(!/^https:\/\/[^/?#]+$/.test(ORIGIN)) throw Error('PUBLIC_BASE_URL must be the HTTPS public origin');
-if(!siteTokens.size)throw Error('Configure at least one TILDA_TOKEN_<SITE> secret');
 if(password.length<24 || /REPLACE/i.test(password)) throw Error('ADMIN_PASSWORD must be a unique secret of 24+ characters');
 const auth=authUtils(process.env.OAUTH_SIGNING_SECRET||'');
 function knownResource(value){
  try{
  const u=new URL(value);
  const match=u.pathname.match(/^\/mcp\/([a-z][a-z0-9-]{0,63})$/);
- return u.origin===ORIGIN && !u.search && !u.hash && !u.username && !u.password && match && siteTokens.has(match[1]) ? value : null;
+ return u.origin===ORIGIN && !u.search && !u.hash && !u.username && !u.password && match ? value : null;
  }catch{return null;}
 }
-const clientOrigin=ORIGIN;
+function normalizeTildaToken(value){
+ if(typeof value!=='string')return null;
+ const token=value.trim().replace(/^Bearer +/i,'');
+ return /^[\x21-\x7e]{1,4096}$/.test(token)?token:null;
+}
 const allowedScope='tilda:read tilda:write';
 const usedCodes=new Map();
 const throttling=new Map();
@@ -57,7 +53,7 @@ function requestParams(q){
  const o=Object.fromEntries(['client_id','redirect_uri','response_type','code_challenge','code_challenge_method','state','scope','resource'].map(k=>[k,q.get(k)||'']));
  if(o.response_type!=='code'||o.code_challenge_method!=='S256'||!/^[A-Za-z0-9_-]{43}$/.test(o.code_challenge))throw Error('authorization_code with PKCE S256 is required');
  if(!validClient(o.client_id,o.redirect_uri))throw Error('Invalid OAuth client or callback');
- if(!knownResource(o.resource)) throw Error('A configured site resource is required');
+ if(!knownResource(o.resource)) throw Error('A valid site resource is required');
  if(o.scope && o.scope.split(' ').some(s=>!['tilda:read','tilda:write','offline_access'].includes(s)))throw Error('Unsupported scope');
  if(o.state.length>2048)throw Error('State too long');
  return o;
@@ -67,9 +63,9 @@ function challenge(res,resource){
  json(res,401,{error:'unauthorized'}, {'www-authenticate':`Bearer resource_metadata="${meta}", scope="tilda:read tilda:write"`});
 }
 function issue(res,values){
- const data={iss:ORIGIN,sub:'single-user',aud:values.resource,client_id:values.client_id,scope:allowedScope};
- const access=auth.sign({...data,typ:'access',exp:now()+3600,jti:auth.random()});
- const refresh=auth.sign({...data,typ:'refresh',exp:now()+2592000,jti:auth.random()});
+ const data={iss:ORIGIN,sub:'single-user',aud:values.resource,client_id:values.client_id,scope:allowedScope,tildaToken:values.tildaToken};
+ const access=auth.encrypt({...data,typ:'access',exp:now()+3600,jti:auth.random()});
+ const refresh=auth.encrypt({...data,typ:'refresh',exp:now()+2592000,jti:auth.random()});
  json(res,200,{access_token:access,token_type:'Bearer',expires_in:3600,refresh_token:refresh,scope:allowedScope});
 }
 function adminRateLimited(){
@@ -103,7 +99,7 @@ async function handle(req,res){
   const nonce=auth.sign({typ:'csrf',exp:now()+600,jti:auth.random(),q:createHash('sha256').update(JSON.stringify(p)).digest('hex')});
   res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'referrer-policy':'no-referrer','set-cookie':`__Host-mcp_csrf=${encodeURIComponent(nonce)}; Path=/; Secure; HttpOnly; SameSite=Lax`});
   const fields=Object.entries(p).map(([k,v])=>`<input type="hidden" name="${escapeHTML(k)}" value="${escapeHTML(v)}">`).join('');
-  res.end(`<!doctype html><html lang="ru"><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Разрешить доступ к Tilda MCP</title><style>body{font:16px system-ui;background:#f4f5f7;color:#182029;margin:0;display:grid;place-items:center;min-height:100vh}.card{background:white;padding:32px;border-radius:16px;max-width:420px;width:calc(100% - 64px);box-shadow:0 4px 18px #0001}input[type=password]{width:100%;box-sizing:border-box;padding:12px;margin:12px 0 18px;border:1px solid #aaa;border-radius:8px}button{background:#004341;color:#fff;border:0;border-radius:8px;padding:12px 18px;cursor:pointer}</style><main class="card"><h1>Подключение Tilda MCP</h1><p>Введи пароль владельца прокси, заданный в Render. Это разрешит ChatGPT доступ к управлению Tilda.</p><form action="/authorize" method="POST">${fields}<input type="hidden" name="csrf" value="${escapeHTML(nonce)}"><label>Пароль владельца<input type="password" name="password" required autofocus autocomplete="off"></label><button type="submit">Разрешить подключение</button></form></main></html>`);
+  res.end(`<!doctype html><html lang="ru"><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Разрешить доступ к Tilda MCP</title><style>body{font:16px system-ui;background:#f4f5f7;color:#182029;margin:0;display:grid;place-items:center;min-height:100vh}.card{background:white;padding:32px;border-radius:16px;max-width:420px;width:calc(100% - 64px);box-shadow:0 4px 18px #0001}input[type=password]{width:100%;box-sizing:border-box;padding:12px;margin:12px 0 18px;border:1px solid #aaa;border-radius:8px}button{background:#004341;color:#fff;border:0;border-radius:8px;padding:12px 18px;cursor:pointer}</style><main class="card"><h1>Подключение Tilda MCP</h1><p>Подключение: <strong>${escapeHTML(new URL(p.resource).pathname.split('/').pop())}</strong>. Введи пароль владельца шлюза и токен Tilda для этого сайта. Токен будет зашифрован для этого подключения.</p><form action="/authorize" method="POST">${fields}<input type="hidden" name="csrf" value="${escapeHTML(nonce)}"><label>Пароль владельца<input type="password" name="password" required autofocus autocomplete="off"></label><label>Токен Tilda MCP<input type="password" name="tilda_token" required maxlength="4103" autocomplete="off" spellcheck="false"></label><button type="submit">Подключить сайт</button></form></main></html>`);
   return;
  }
  if(path==='/authorize' && req.method==='POST'){
@@ -115,7 +111,9 @@ async function handle(req,res){
   try{csrf=auth.verify(body.csrf);}catch{return fail(res,403,'access_denied','CSRF validation failed');}
   const q=createHash('sha256').update(JSON.stringify(p)).digest('hex');
   if(csrf.typ!=='csrf'||csrf.q!==q||!auth.secureEqual(cookies(req)['__Host-mcp_csrf']||'',body.csrf)||!auth.secureEqual(body.password||'',password))return fail(res,403,'access_denied','Incorrect password or session');
-  const code=auth.encrypt({typ:'code',exp:now()+300,client_id:p.client_id,redirect_uri:p.redirect_uri,code_challenge:p.code_challenge,resource:p.resource,scope:allowedScope,jti:auth.random()});
+  const tildaToken=normalizeTildaToken(body.tilda_token);
+  if(!tildaToken)return fail(res,400,'invalid_request','Enter a valid Tilda MCP token');
+  const code=auth.encrypt({tildaToken,typ:'code',exp:now()+300,client_id:p.client_id,redirect_uri:p.redirect_uri,code_challenge:p.code_challenge,resource:p.resource,scope:allowedScope,jti:auth.random()});
   const redirect=new URL(p.redirect_uri);redirect.searchParams.set('code',code);if(p.state)redirect.searchParams.set('state',p.state);
   res.writeHead(302,{'location':redirect.toString(),'cache-control':'no-store','referrer-policy':'no-referrer','set-cookie':'__Host-mcp_csrf=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0'});res.end();return;
  }
@@ -133,7 +131,7 @@ async function handle(req,res){
    return issue(res,code);
   }
   if(p.grant_type==='refresh_token'){
-   let refresh;try{refresh=auth.verify(p.refresh_token);}catch{return fail(res,400,'invalid_grant','Expired or invalid refresh token');}
+   let refresh;try{refresh=auth.decrypt(p.refresh_token);}catch{return fail(res,400,'invalid_grant','Expired or invalid refresh token');}
    if(refresh.typ!=='refresh'||refresh.iss!==ORIGIN||!knownResource(refresh.aud)||refresh.client_id!==p.client_id)return fail(res,400,'invalid_grant','Invalid refresh token');
    if(p.resource && p.resource!==refresh.aud)return fail(res,400,'invalid_target','Invalid resource');
    return issue(res,{...refresh,resource:refresh.aud});
@@ -142,12 +140,12 @@ async function handle(req,res){
  }
  if(resource){
   const bearer=(req.headers.authorization||'').match(/^Bearer (.+)$/i);
-  let decoded;try{decoded=bearer?auth.verify(bearer[1]):null;}catch{}
-  if(!decoded||decoded.typ!=='access'||decoded.iss!==ORIGIN||decoded.aud!==resource||decoded.scope!==allowedScope)return challenge(res,resource);
+  let decoded;try{decoded=bearer?auth.decrypt(bearer[1]):null;}catch{}
+  if(!decoded||decoded.typ!=='access'||decoded.iss!==ORIGIN||decoded.aud!==resource||decoded.scope!==allowedScope||!normalizeTildaToken(decoded.tildaToken))return challenge(res,resource);
   if(!['GET','POST','DELETE'].includes(req.method))return text(res,405,'Method not allowed',{'allow':'GET, POST, DELETE'});
   const upstreamHeaders=new Headers();
   for(const name of ['accept','content-type','mcp-session-id','mcp-protocol-version','last-event-id'])if(req.headers[name])upstreamHeaders.set(name,req.headers[name]);
-  upstreamHeaders.set('authorization','Bearer '+siteTokens.get(new URL(resource).pathname.split('/').pop()));
+  upstreamHeaders.set('authorization','Bearer '+decoded.tildaToken);
   const init={method:req.method,headers:upstreamHeaders,redirect:'manual',signal:AbortSignal.timeout(120000)};
   if(req.method==='POST')init.body=await readBody(req,2*1024*1024);
   let upstreamRes;

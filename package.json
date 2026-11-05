@@ -1,6 +1,6 @@
 {
   "name": "tilda-mcp-render-gateway",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,5 +10,5 @@
     "start": "node src/server.mjs",
     "test": "node --test"
   },
-  "description": "Single-user OAuth PKCE gateway for Tilda MCP hosted on Render"
+  "description": "Personal multi-site OAuth PKCE gateway with encrypted credentials entered during connection"
 }
