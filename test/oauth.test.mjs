@@ -31,6 +31,7 @@ async function authorization(site){
  const request={client_id,redirect_uri:callback,response_type:'code',code_challenge:challenge,code_challenge_method:'S256',state:'testState',scope:'tilda:read tilda:write offline_access',resource:base+'/mcp/'+site};
  const form=await fetch(local+'/authorize?'+new URLSearchParams(request));
  assert.equal(form.status,200);
+ assert.equal(form.headers.get('referrer-policy'),'same-origin');
  const html=await form.text();
  assert.match(html,/name="tilda_token"/);
  const csrf=html.match(/name="csrf" value="([^"]+)"/)?.[1];
@@ -122,4 +123,14 @@ test('PKCE mismatch and corrupted encrypted credentials are rejected',async()=>{
  const {access_token}=await response.json();
  const broken=(access_token[0]==='A'?'B':'A')+access_token.slice(1);
  assert.equal((await fetch(local+'/mcp/alpha',{headers:{authorization:'Bearer '+broken}})).status,401);
+});
+
+test('authorization rejects foreign, null and absent Origin headers',async()=>{
+ for(const origin of ['https://evil.example','null',undefined]){
+ const headers={'content-type':'application/x-www-form-urlencoded'};
+ if(origin!==undefined)headers.origin=origin;
+ const r=await fetch(local+'/authorize',{method:'POST',headers,body:''});
+ assert.equal(r.status,403);
+ assert.equal((await r.json()).error_description,'Invalid origin');
+ }
 });
