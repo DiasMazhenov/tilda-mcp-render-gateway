@@ -6,7 +6,7 @@ import { authUtils, isAllowedChatGptRedirect } from '../src/auth.mjs';
 
 const base='https://example.onrender.com';
 const local='http://127.0.0.1:39831';
-const pwd='test-password-long-enough-123456789';
+const pwd='TestPass10';
 const key='a'.repeat(64);
 const callback='https://chatgpt.com/connector_platform_oauth_redirect';
 const app=spawn(process.execPath,['--import','./test-support/upstream.mjs','src/server.mjs'],{

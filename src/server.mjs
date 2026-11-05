@@ -10,7 +10,7 @@ const port=Number(process.env.PORT||3000);
 const now=()=>Math.floor(Date.now()/1000);
 const password=process.env.ADMIN_PASSWORD||'';
 if(!/^https:\/\/[^/?#]+$/.test(ORIGIN)) throw Error('PUBLIC_BASE_URL must be the HTTPS public origin');
-if(password.length<24 || /REPLACE/i.test(password)) throw Error('ADMIN_PASSWORD must be a unique secret of 24+ characters');
+if(password.length<10 || /REPLACE/i.test(password)) throw Error('ADMIN_PASSWORD must be a unique secret of 10+ characters');
 const auth=authUtils(process.env.OAUTH_SIGNING_SECRET||'');
 function knownResource(value){
  try{

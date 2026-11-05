@@ -17,7 +17,7 @@ ChatGPT проходит OAuth Authorization Code + PKCE S256 на шлюзе. �
 | NODE_VERSION | 24 |
 | PUBLIC_BASE_URL | HTTPS-адрес сервиса без завершающего слеша |
 | OAUTH_SIGNING_SECRET | 64 hex-символа, создай через `openssl rand -hex 32` |
-| ADMIN_PASSWORD | Уникальный случайный пароль от 24 символов |
+| ADMIN_PASSWORD | Уникальный случайный пароль от 10 символов |
 
 Не отправляй секреты в чат и не добавляй их в GitHub. Пароль и ключ шифрования задай в Render Environment один раз. Токены Tilda вводятся на странице OAuth-подключения, а не в Render.
 Если адрес сервиса ещё неизвестен, выбери имя сервиса и уточни его выданный домен в Render. После этого исправь PUBLIC_BASE_URL и перезапусти деплой.
