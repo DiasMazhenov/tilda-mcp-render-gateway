@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tilda-mcp-gateway
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: OAUTH_SIGNING_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: TILDA_TOKEN_COMFORTCLINIC
+        sync: false
