@@ -3,7 +3,7 @@ services:
     name: tilda-mcp-gateway
     runtime: node
     plan: free
-    buildCommand: npm install --omit=dev
+    buildCommand: npm ci --omit=dev
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
@@ -17,3 +17,5 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         generateValue: true
+      - key: DATABASE_URL
+        sync: false

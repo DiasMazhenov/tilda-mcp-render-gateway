@@ -1,14 +1,20 @@
 {
   "name": "tilda-mcp-render-gateway",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node --test"
   },
-  "description": "Personal multi-site OAuth PKCE gateway with encrypted credentials entered during connection"
+  "description": "Personal universal Tilda MCP gateway with encrypted named connections in Neon and protected settings",
+  "dependencies": {
+    "@neondatabase/serverless": "1.2.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
+  }
 }
