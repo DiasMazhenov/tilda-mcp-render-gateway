@@ -157,3 +157,14 @@ test('parallel OAuth forms work without a shared cookie while changed and expire
  const expired=authUtils(key).sign({typ:'csrf',q:'irrelevant',exp:Math.floor(Date.now()/1000)-1});
  assert.equal((await login(a,'TEST_TOKEN',{csrf:expired})).status,403);
 });
+
+test('OAuth form policy permits its validated ChatGPT callback without opening arbitrary destinations',async()=>{
+ const a=await authorization('alpha');
+ const response=await fetch(local+'/authorize?'+new URLSearchParams(a.request));
+ const policy=response.headers.get('content-security-policy');
+ const directive=policy.split(';').map(s=>s.trim()).find(s=>s.startsWith('form-action '));
+ assert.equal(directive,"form-action 'self' "+callback);
+ assert.ok(!directive.includes('*'));
+ const invalid=await fetch(local+'/authorize?'+new URLSearchParams({...a.request,redirect_uri:'https://evil.example/callback'}));
+ assert.equal(invalid.status,400);
+});

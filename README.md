@@ -124,3 +124,10 @@ Node 24. `npm ci`, затем `npm test`.
 - https://neon.com/docs/get-started/connect-neon
 - https://neon.com/docs/serverless/serverless-driver
 - https://render.com/docs/web-services
+
+
+### Проверка настоящим Chromium
+
+`npm run test:browser` запускает отдельную браузерную проверку двух callback URL ChatGPT. Для установленного Chromium задай BROWSER_EXECUTABLE_PATH; иначе установи Chromium для playwright-core. Браузер обращается к перехваченным тестовым HTTPS-адресам, а не к настоящему аккаунту ChatGPT. Проверяются пустые необязательные поля, отправка формы, редирект, PKCE-обмен кода и tools/list. Реальные пароли, ключи Tilda и Neon не используются.
+
+OAuth-страница разрешает в CSP form-action свой origin и только проверенный callback текущего запроса. Иначе Chromium может блокировать редирект после успешного POST. Настройки /settings по-прежнему разрешают отправку форм только на свой origin.
