@@ -134,3 +134,13 @@ test('authorization rejects foreign, null and absent Origin headers',async()=>{
  assert.equal((await r.json()).error_description,'Invalid origin');
  }
 });
+
+test('login distinguishes incorrect owner password from a missing browser session cookie',async()=>{
+ const a=await authorization('alpha');
+ const wrongPassword=await login(a,'TEST_TOKEN',{password:'wrong-password'});
+ assert.equal(wrongPassword.status,403);
+ assert.match((await wrongPassword.json()).error_description,/Incorrect owner password/);
+ const noCookie=await fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{origin:base},body:new URLSearchParams({...a.request,csrf:a.csrf,password:pwd,tilda_token:'TEST_TOKEN'})});
+ assert.equal(noCookie.status,403);
+ assert.match((await noCookie.json()).error_description,/session cookie/);
+});

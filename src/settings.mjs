@@ -55,7 +55,9 @@ export async function handleSettings(req,res,ctx){
  if(rateLimited()){fail(res,429,'slow_down','Too many attempts');return true;}
  const body=params(await readBody(req,32768),req.headers['content-type']);
  let nonce;try{nonce=auth.verify(body.csrf);}catch{}
- if(nonce?.typ!=='settings-login'||!auth.secureEqual(body.csrf||'',cookie(req,'__Host-tilda_login'))||!auth.secureEqual(body.password||'',password)){fail(res,403,'access_denied','Incorrect password or session');return true;}
+ if(nonce?.typ!=='settings-login'){fail(res,403,'access_denied','Login form expired. Open /settings again.');return true;}
+ if(!auth.secureEqual(body.csrf||'',cookie(req,'__Host-tilda_login'))){fail(res,403,'access_denied','Login session cookie is missing or was replaced. Open /settings again in one tab.');return true;}
+ if(!auth.secureEqual(body.password||'',password)){fail(res,403,'access_denied','Incorrect owner password. Use the current ADMIN_PASSWORD from Render.');return true;}
  const value=auth.encrypt({typ:'admin',iss:origin,passwordVersion:version,csrf:auth.random(),exp:now()+28800});
  redirect(res,'/settings',makeCookie('__Host-tilda_admin',value,28800));return true;
  }

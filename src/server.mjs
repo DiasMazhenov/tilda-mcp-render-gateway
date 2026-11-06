@@ -116,7 +116,9 @@ async function handle(req,res){
   let csrf;
   try{csrf=auth.verify(body.csrf);}catch{return fail(res,403,'access_denied','CSRF validation failed');}
   const q=createHash('sha256').update(JSON.stringify(p)).digest('hex');
-  if(csrf.typ!=='csrf'||csrf.q!==q||!auth.secureEqual(cookies(req)['__Host-mcp_csrf']||'',body.csrf)||!auth.secureEqual(body.password||'',password))return fail(res,403,'access_denied','Incorrect password or session');
+  if(csrf.typ!=='csrf'||csrf.q!==q)return fail(res,403,'access_denied','Login form changed. Start a fresh connection from ChatGPT.');
+  if(!auth.secureEqual(cookies(req)['__Host-mcp_csrf']||'',body.csrf))return fail(res,403,'access_denied','Login session cookie is missing or was replaced. Close other login tabs and start a fresh connection from ChatGPT.');
+  if(!auth.secureEqual(body.password||'',password))return fail(res,403,'access_denied','Incorrect owner password. Use the current ADMIN_PASSWORD from Render, not the Tilda token.');
   let credential;
   if(store){
    if(body.tilda_token?.trim()){
