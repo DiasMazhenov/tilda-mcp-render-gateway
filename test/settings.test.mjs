@@ -37,7 +37,7 @@ test('password-protected settings manage named keys without revealing saved cred
  const oauthPage=await fetch(local+'/authorize?'+new URLSearchParams(request));
  const oauthHtml=await oauthPage.text();
  assert.match(oauthHtml,/Управление сохранёнными подключениями/);
- const oauthLogin=await fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{origin,cookie:oauthPage.headers.get('set-cookie').split(';')[0]},body:new URLSearchParams({...request,csrf:csrfFrom(oauthHtml),password:'TestPass10'})});
+ const oauthLogin=await fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{origin},body:new URLSearchParams({...request,csrf:csrfFrom(oauthHtml),password:'TestPass10'})});
  assert.equal(oauthLogin.status,302);
  const oauthCode=new URL(oauthLogin.headers.get('location')).searchParams.get('code');
  const tokens=await (await fetch(local+'/token',{method:'POST',body:new URLSearchParams({grant_type:'authorization_code',code:oauthCode,client_id:reg.client_id,redirect_uri:request.redirect_uri,code_verifier:verifier,resource:request.resource})})).json();

@@ -36,7 +36,7 @@ async function authorization(site){
  assert.match(html,/name="tilda_token"/);
  const csrf=html.match(/name="csrf" value="([^"]+)"/)?.[1];
  assert.ok(csrf);
- return {request,verifier,csrf,cookie:form.headers.get('set-cookie').split(';')[0],html};
+ return {request,verifier,csrf,cookie:form.headers.get('set-cookie')?.split(';')[0]||'',html};
 }
 async function login(a,token,extra={}){
  return fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{'content-type':'application/x-www-form-urlencoded',origin:base,cookie:a.cookie},body:new URLSearchParams({...a.request,csrf:a.csrf,password:pwd,tilda_token:token,...extra})});
@@ -135,12 +135,25 @@ test('authorization rejects foreign, null and absent Origin headers',async()=>{
  }
 });
 
-test('login distinguishes incorrect owner password from a missing browser session cookie',async()=>{
+test('OAuth login accepts a valid signed form without cookies and still rejects incorrect passwords',async()=>{
  const a=await authorization('alpha');
  const wrongPassword=await login(a,'TEST_TOKEN',{password:'wrong-password'});
  assert.equal(wrongPassword.status,403);
  assert.match((await wrongPassword.json()).error_description,/Incorrect owner password/);
  const noCookie=await fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{origin:base},body:new URLSearchParams({...a.request,csrf:a.csrf,password:pwd,tilda_token:'TEST_TOKEN'})});
- assert.equal(noCookie.status,403);
- assert.match((await noCookie.json()).error_description,/session cookie/);
+ assert.equal(noCookie.status,302);
+ assert.ok(new URL(noCookie.headers.get('location')).searchParams.get('code'));
+});
+
+
+test('parallel OAuth forms work without a shared cookie while changed and expired forms fail',async()=>{
+ const a=await authorization('alpha'),b=await authorization('beta');
+ for(const form of [a,b]){
+ const result=await fetch(local+'/authorize',{method:'POST',redirect:'manual',headers:{origin:base,cookie:'__Host-mcp_csrf=replaced'},body:new URLSearchParams({...form.request,csrf:form.csrf,password:pwd,tilda_token:'TEST_TOKEN'})});
+ assert.equal(result.status,302);
+ }
+ const changed=await login(a,'TEST_TOKEN',{state:'tampered'});
+ assert.equal(changed.status,403);
+ const expired=authUtils(key).sign({typ:'csrf',q:'irrelevant',exp:Math.floor(Date.now()/1000)-1});
+ assert.equal((await login(a,'TEST_TOKEN',{csrf:expired})).status,403);
 });

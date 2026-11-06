@@ -39,7 +39,6 @@ function json(res,code,body,headers={}){
 function fail(res,code,codeText,description){json(res,code,{error:codeText,error_description:description});}
 function text(res,code,body,headers={}){res.writeHead(code,{'content-type':'text/plain; charset=utf-8','cache-control':'no-store',...headers});res.end(body);}
 function escapeHTML(s){return String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(s=>s.trim().split('=').map(decodeURIComponent)).filter(x=>x.length===2));}
 async function readBody(req,max=16384){
  if(!limitFormSize(req,max)) throw Error('Body too large');
  const parts=[];let size=0;
@@ -103,7 +102,7 @@ async function handle(req,res){
   let p;
   try{p=requestParams(url.searchParams);}catch(e){return fail(res,400,'invalid_request',e.message);}
   const nonce=auth.sign({typ:'csrf',exp:now()+600,jti:auth.random(),q:createHash('sha256').update(JSON.stringify(p)).digest('hex')});
-  res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'referrer-policy':'same-origin','set-cookie':`__Host-mcp_csrf=${encodeURIComponent(nonce)}; Path=/; Secure; HttpOnly; SameSite=Lax`});
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",'referrer-policy':'same-origin'});
   const fields=Object.entries(p).map(([k,v])=>`<input type="hidden" name="${escapeHTML(k)}" value="${escapeHTML(v)}">`).join('');
   res.end(`<!doctype html><html lang="ru"><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>Разрешить доступ к Tilda MCP</title><style>body{font:16px system-ui;background:#f4f5f7;color:#182029;margin:0;display:grid;place-items:center;min-height:100vh}.card{background:white;padding:32px;border-radius:16px;max-width:420px;width:calc(100% - 64px);box-shadow:0 4px 18px #0001}input[type=password]{width:100%;box-sizing:border-box;padding:12px;margin:12px 0 18px;border:1px solid #aaa;border-radius:8px}button{background:#004341;color:#fff;border:0;border-radius:8px;padding:12px 18px;cursor:pointer}</style><main class="card"><h1>Подключение Tilda MCP</h1><p>Подключение: <strong>${escapeHTML(new URL(p.resource).pathname.split('/').pop())}</strong>. Введи пароль владельца шлюза и токен Tilda для этого сайта. Ключи не отображаются в переписке.</p><form action="/authorize" method="POST">${fields}<input type="hidden" name="csrf" value="${escapeHTML(nonce)}"><label>Пароль владельца<input type="password" name="password" required autofocus autocomplete="off"></label>${store?'<p><a href="/settings" target="_blank" rel="noopener">Управление сохранёнными подключениями</a></p><p>Вход разрешит работу со всеми сохранёнными подключениями. Новый ключ можно добавить сейчас или позже в настройках.</p><label>Название нового подключения<input name="connection_name" maxlength="100"></label>':''}<label>Токен Tilda MCP<input type="password" name="tilda_token" ${store?'':'required'} maxlength="4103" autocomplete="off" spellcheck="false"></label><button type="submit">Подключить сайт</button></form></main></html>`);
   return;
@@ -117,7 +116,8 @@ async function handle(req,res){
   try{csrf=auth.verify(body.csrf);}catch{return fail(res,403,'access_denied','CSRF validation failed');}
   const q=createHash('sha256').update(JSON.stringify(p)).digest('hex');
   if(csrf.typ!=='csrf'||csrf.q!==q)return fail(res,403,'access_denied','Login form changed. Start a fresh connection from ChatGPT.');
-  if(!auth.secureEqual(cookies(req)['__Host-mcp_csrf']||'',body.csrf))return fail(res,403,'access_denied','Login session cookie is missing or was replaced. Close other login tabs and start a fresh connection from ChatGPT.');
+  // OAuth has no ambient login session: strict Origin plus a signed, expiring form
+  // bound to client/callback/PKCE/resource protects this password POST without cookies.
   if(!auth.secureEqual(body.password||'',password))return fail(res,403,'access_denied','Incorrect owner password. Use the current ADMIN_PASSWORD from Render, not the Tilda token.');
   let credential;
   if(store){
@@ -134,7 +134,7 @@ async function handle(req,res){
   }
   const code=auth.encrypt({...credential,typ:'code',exp:now()+300,client_id:p.client_id,redirect_uri:p.redirect_uri,code_challenge:p.code_challenge,resource:p.resource,scope:allowedScope,jti:auth.random()});
   const redirect=new URL(p.redirect_uri);redirect.searchParams.set('code',code);if(p.state)redirect.searchParams.set('state',p.state);
-  res.writeHead(302,{'location':redirect.toString(),'cache-control':'no-store','referrer-policy':'no-referrer','set-cookie':'__Host-mcp_csrf=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0'});res.end();return;
+  res.writeHead(302,{'location':redirect.toString(),'cache-control':'no-store','referrer-policy':'no-referrer'});res.end();return;
  }
  if(path==='/token' && req.method==='POST'){
   const p=params(await readBody(req,32768),req.headers['content-type']);
